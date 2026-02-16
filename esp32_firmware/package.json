@@ -1,0 +1,11 @@
+{
+  "name": "esp32-braille-controller",
+  "version": "1.0.0",
+  "description": "ESP32 firmware for Braille solenoid actuation",
+  "main": "esp32_braille_controller.ino",
+  "dependencies": {
+    "ArduinoJson": "^6.21.0"
+  },
+  "board": "esp32:esp32:esp32",
+  "port": "COM3"
+}
