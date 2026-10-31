@@ -1,0 +1,4 @@
+# Object detection. Pulls in PyTorch (CPU build on Windows, ~250 MB).
+# The server still runs without these: the camera feed is relayed, but nothing is detected.
+-r requirements.txt
+ultralytics>=8.3.0

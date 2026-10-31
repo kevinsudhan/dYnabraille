@@ -1,0 +1,10 @@
+# Core processing server (device bridge, iPhone camera ingest, ElevenLabs, web UI)
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30
+pydantic-settings>=2.4
+httpx>=0.27
+pyserial>=3.5
+zeroconf>=0.132
+cryptography>=42
+numpy>=1.26
+opencv-python-headless>=4.9

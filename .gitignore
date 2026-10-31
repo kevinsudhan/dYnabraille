@@ -44,3 +44,16 @@ Thumbs.db
 *.avi
 *.mp4
 *.mov
+
+# DynaBraille: local secrets and generated files
+server/.env
+server/data/
+server/models/
+server/.venv/
+.pytest_cache/
+web/node_modules/
+web/dist/
+firmware/.pio/
+firmware/.pio-venv/
+firmware/tools/.pio/
+firmware/dynabraille_esp32/config.h

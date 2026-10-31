@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pin tester · DynaBraille</title>
+<style>
+  :root {
+    --bg: #070b14; --surface: #0c1322; --raised: #111a2d; --line: #1c2740; --line-strong: #2a3a58;
+    --ink: #e8eef8; --muted: #8d9bb6; --faint: #5b6a86; --accent: #2ee6c5; --accent-ink: #04211c;
+    --sky: #6aa2ff; --ok: #3ddc97; --warn: #ffbe5c; --bad: #ff6b81; --pcb: #10151f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px 24px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 18px; margin: 0; letter-spacing: -0.01em; }
+  h1 span { color: var(--muted); font-weight: 400; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 13px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+  .pill.ok .dot { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+  .pill.warn .dot { background: var(--warn); }
+  .pill.bad .dot { background: var(--bad); }
+  .spacer { flex: 1; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .btn { border: 1px solid var(--line-strong); background: var(--raised); border-radius: 10px; padding: 7px 14px; }
+  .btn:hover { border-color: var(--accent); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; border-color: var(--line-strong); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+  .btn.danger { border-color: rgb(255 107 129 / .5); color: var(--bad); }
+  .btn.on { border-color: var(--accent); background: rgb(46 230 197 / .15); }
+  main { display: grid; grid-template-columns: minmax(520px, 1fr) minmax(340px, 420px); gap: 20px; padding: 20px 24px; max-width: 1280px; margin: 0 auto; }
+  @media (max-width: 960px) { main { grid-template-columns: 1fr; } }
+  .card { border: 1px solid var(--line); background: var(--surface); border-radius: 16px; padding: 16px 18px; }
+  .card h2 { font-size: 14px; margin: 0 0 10px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
+  .side { display: flex; flex-direction: column; gap: 16px; }
+
+  /* board */
+  .board-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .pcb { position: relative; display: grid; grid-template-columns: auto 150px auto; background: var(--pcb); border: 1px solid #263248; border-radius: 14px; padding: 46px 10px 46px; box-shadow: inset 0 0 0 6px #0b0f17; }
+  .antenna { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); font-size: 11px; color: var(--faint); letter-spacing: .12em; text-transform: uppercase; }
+  .usb { position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); width: 64px; height: 22px; border-radius: 8px 8px 4px 4px; background: linear-gradient(#9aa6b8, #59647a); color: #0b0f17; font-size: 10px; font-weight: 700; display: grid; place-items: center; }
+  .chip { grid-column: 2; grid-row: 1 / span 15; margin: 14px 18px; border-radius: 8px; background: linear-gradient(160deg, #1a2233, #121826); border: 1px solid #2a3448; display: grid; place-items: center; color: var(--faint); font-size: 11px; text-align: center; padding: 8px; }
+  .col { display: grid; grid-template-rows: repeat(15, 34px); align-items: center; }
+  .pin { display: flex; align-items: center; gap: 8px; }
+  .col.left .pin { flex-direction: row; justify-content: flex-end; }
+  .col.right .pin { flex-direction: row-reverse; justify-content: flex-end; }
+  .label { min-width: 34px; font: 600 12px/1 ui-monospace, Consolas, monospace; color: var(--muted); }
+  .col.left .label { text-align: right; }
+  .gpio { font-size: 11px; color: var(--faint); min-width: 26px; }
+  .col.left .gpio { text-align: right; }
+  .hole { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #8a7a3f; background: radial-gradient(circle, #222 35%, #c7a948 38%, #9b8236 70%); touch-action: none; user-select: none; transition: transform .08s, box-shadow .15s; }
+  button.hole:hover { transform: scale(1.12); box-shadow: 0 0 0 3px rgb(46 230 197 / .35); }
+  .hole:disabled { opacity: .35; filter: grayscale(1); cursor: not-allowed; }
+  .hole.lit { background: radial-gradient(circle, #e9fffb 20%, var(--accent) 45%, #13a58c); border-color: var(--accent); box-shadow: 0 0 18px var(--accent); }
+  .hole.selected { outline: 2px solid var(--sky); outline-offset: 3px; }
+  .tag { font: 700 11px/1 system-ui; padding: 3px 6px; border-radius: 6px; background: var(--accent); color: var(--accent-ink); }
+  .tag.none { background: var(--line-strong); color: var(--muted); }
+
+  /* solenoid picker */
+  .cell { display: grid; grid-template-columns: repeat(2, 64px); gap: 10px; justify-content: center; margin: 8px 0 12px; }
+  .sol { height: 54px; border-radius: 14px; border: 1px solid var(--line-strong); background: var(--raised); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .sol b { font-size: 16px; }
+  .sol small { font-size: 11px; color: var(--faint); }
+  .sol.set { border-color: var(--accent); }
+  .sol.set small { color: var(--accent); }
+  .sol:disabled { opacity: .45; cursor: not-allowed; }
+  .selected-pin { font-size: 15px; text-align: center; }
+  .selected-pin strong { color: var(--sky); }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 4px 6px; border-bottom: 1px solid var(--line); }
+  td:last-child { text-align: right; }
+  code.line { display: block; margin-top: 10px; padding: 10px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); font: 12px ui-monospace, Consolas, monospace; color: var(--accent); white-space: pre-wrap; word-break: break-all; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .log { height: 190px; overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font: 12px/1.5 ui-monospace, Consolas, monospace; color: var(--muted); white-space: pre-wrap; }
+  .log .ev { color: var(--accent); }
+  .log .err { color: var(--bad); }
+  .msg { margin-top: 8px; font-size: 13px; }
+  .msg.ok { color: var(--ok); } .msg.bad { color: var(--bad); } .msg.warn { color: var(--warn); }
+  kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--line-strong); border-radius: 5px; padding: 1px 5px; background: var(--raised); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pin tester <span>· DynaBraille</span></h1>
+  <div id="status" class="pill"><span class="dot"></span><span id="status-text">Connecting…</span></div>
+  <div class="spacer"></div>
+  <button class="btn" id="walk">Walk all pins</button>
+  <button class="btn danger" id="alloff">All off</button>
+</header>
+
+<main>
+  <section class="card board-wrap">
+    <h2 style="align-self:flex-start">ESP32 DevKit V1 · top view (chip side up, USB at the bottom)</h2>
+    <div class="pcb" id="pcb">
+      <div class="antenna">antenna end</div>
+      <div class="col left" id="col-left"></div>
+      <div class="chip">ESP32-WROOM-32<br><br>click a pin = pulse 0.5 s<br>hold = stays on (max 3 s)</div>
+      <div class="col right" id="col-right"></div>
+      <div class="usb">USB-C</div>
+    </div>
+    <p class="hint">Unpowered solenoids sit <b>up</b> on this cell, so the one on the pin you press <b>drops down</b>. Grey pins can't drive a solenoid.</p>
+  </section>
+
+  <div class="side">
+    <section class="card">
+      <h2>Which solenoid moved?</h2>
+      <div class="selected-pin" id="selected">Press a pin on the board first.</div>
+      <div class="cell" id="cell"></div>
+      <div class="row" style="justify-content:center">
+        <button class="btn" id="clear-pin" disabled>Nothing moved / untag</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Result</h2>
+      <table id="map"></table>
+      <div id="button-row" class="hint"></div>
+      <code class="line" id="line"></code>
+      <div class="row">
+        <button class="btn" id="test">Test S1 → S6</button>
+        <button class="btn" id="find-button">Find the button</button>
+        <button class="btn" id="copy">Copy</button>
+        <button class="btn primary" id="save" disabled>Save to config.h</button>
+      </div>
+      <div class="msg" id="msg"></div>
+    </section>
+
+    <section class="card">
+      <h2>Serial</h2>
+      <div class="log" id="log"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+// Header rows from the antenna end. [label, gpio, kind]
+const LEFT = [['EN', null, 'reset pin'], ['VP', 36, 'input only'], ['VN', 39, 'input only'], ['D34', 34, 'input only'],
+  ['D35', 35, 'input only'], ['D32', 32], ['D33', 33], ['D25', 25], ['D26', 26], ['D27', 27], ['D14', 14], ['D12', 12],
+  ['D13', 13], ['GND', null, 'ground'], ['VIN', null, 'power']];
+const RIGHT = [['D23', 23], ['D22', 22], ['TX0', 1, 'tx'], ['RX0', 3, 'driven by the USB chip'], ['D21', 21], ['D19', 19],
+  ['D18', 18], ['D5', 5], ['TX2', 17], ['RX2', 16], ['D4', 4], ['D2', 2, 'led'], ['D15', 15], ['GND', null, 'ground'],
+  ['3V3', null, 'power']];
+const DRIVABLE = new Set([2, 4, 5, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33, 1]);
+const WALK_ORDER = [...RIGHT, ...LEFT].map(p => p[1]).filter(g => DRIVABLE.has(g));
+const LABEL = Object.fromEntries([...LEFT, ...RIGHT].filter(p => p[1] != null).map(p => [p[1], p[0]]));
+const STORE = 'dynabraille-pin-tester';
+
+let map = { 1: null, 2: null, 3: null, 4: null, 5: null, 6: null };  // solenoid -> gpio
+let button = null;
+let buttonTo3v3 = null;  // how the button is wired: false = to GND, true = to 3V3
+let selected = null;
+let walking = false;
+const lit = new Set();
+const $ = id => document.getElementById(id);
+
+// ---------------------------------------------------------------- state
+try {
+  const saved = JSON.parse(localStorage.getItem(STORE) || 'null');
+  if (saved) ({ map, button, buttonTo3v3 } = { map: { ...map, ...saved.map }, button: saved.button ?? null, buttonTo3v3: saved.buttonTo3v3 ?? null });
+} catch {}
+// Seed from the URL, e.g. #S4=5&S5=18&S6=19, without overwriting anything already tagged.
+for (const [k, v] of new URLSearchParams(location.hash.slice(1))) {
+  const s = Number(k.replace(/^S/i, '')), g = Number(v);
+  if (s >= 1 && s <= 6 && DRIVABLE.has(g) && map[s] == null && !Object.values(map).includes(g)) map[s] = g;
+}
+const persist = () => { try { localStorage.setItem(STORE, JSON.stringify({ map, button, buttonTo3v3 })); } catch {} };
+const solenoidOf = g => Number(Object.keys(map).find(s => map[s] === g)) || null;
+
+// ---------------------------------------------------------------- serial link
+let ws;
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'status') setStatus(m);
+    else if (m.type === 'history') m.lines.forEach(addLog);
+    else if (m.type === 'line') onLine(m.text);
+  };
+  ws.onclose = () => { setStatus({ state: 'offline' }); setTimeout(connect, 1500); };
+}
+const send = msg => ws && ws.readyState === 1 && ws.send(JSON.stringify(msg));
+
+function setStatus(s) {
+  const pill = $('status');
+  pill.className = 'pill ' + ({ connected: 'ok', busy: 'warn', missing: 'warn' }[s.state] || 'bad');
+  $('status-text').textContent = {
+    connected: `Connected · ${s.port}`,
+    busy: `${s.port} is busy: close the serial monitor (Ctrl+C in its tab)`,
+    missing: 'No ESP32 found: plug it in',
+    offline: 'Pin tester stopped',
+    starting: 'Starting…',
+  }[s.state] || `Error: ${s.detail || s.state}`;
+}
+
+function onLine(text) {
+  const on = text.match(/^@on (\d+)/), off = text.match(/^@off (\d+)/);
+  if (on) { lit.add(Number(on[1])); renderBoard(); }
+  else if (off) { lit.delete(Number(off[1])); renderBoard(); }
+  else if (text === 'All off.') { lit.clear(); renderBoard(); }
+  const btn = text.match(/^@button (\d+) (gnd|3v3)/);
+  if (btn) {
+    button = Number(btn[1]);
+    buttonTo3v3 = btn[2] === '3v3';
+    persist(); renderResult();
+    say(`Button found: ${LABEL[button] ?? ''} (GPIO ${button}), wired to ${buttonTo3v3 ? '3V3' : 'GND'}. Click Save to config.h.`, 'ok');
+  } else if (/^No clear match/.test(text)) {
+    say('No button found. Try again, pressing firmly 3 times within the 8 seconds.', 'bad');
+  }
+  if (!on && !off && !btn) addLog(text);
+}
+
+function addLog(text) {
+  const log = $('log');
+  const div = document.createElement('div');
+  div.textContent = text;
+  if (text.startsWith('@err')) div.className = 'err';
+  else if (/found|Button is/.test(text)) div.className = 'ev';
+  log.appendChild(div);
+  while (log.childNodes.length > 300) log.removeChild(log.firstChild);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ---------------------------------------------------------------- board
+// Built once; later updates only toggle classes. (Rebuilding would replace the pin
+// under the pointer mid-click, and the release would never reach it.)
+const holes = new Map();  // gpio -> pin button
+const tags = new Map();   // gpio -> S-tag span
+
+function buildBoard() {
+  for (const [id, rows] of [['col-left', LEFT], ['col-right', RIGHT]]) {
+    const col = $(id);
+    for (const [label, gpio, kind] of rows) {
+      const pin = document.createElement('div');
+      pin.className = 'pin';
+      const can = DRIVABLE.has(gpio);
+      const hole = document.createElement(can ? 'button' : 'div');
+      hole.className = 'hole';
+      if (!can) hole.setAttribute('aria-disabled', 'true'), hole.style.opacity = .35;
+      hole.title = can
+        ? `${label} = GPIO ${gpio}. Click to pulse, hold to keep on.` + (kind === 'tx' ? ' TX0 is the serial line: it can only be pulsed.' : '') + (kind === 'led' ? ' Also the blue on-board LED.' : '')
+        : `${label}: ${kind}`;
+      pin.innerHTML = `<span class="label">${label}</span><span class="gpio">${gpio != null ? gpio : ''}</span>`;
+      pin.appendChild(hole);  // the right column is flex row-reverse, so the hole still faces the chip
+      if (can) {
+        bindPress(hole, gpio);
+        holes.set(gpio, hole);
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.hidden = true;
+        pin.appendChild(tag);
+        tags.set(gpio, tag);
+      }
+      col.appendChild(pin);
+    }
+  }
+}
+
+function renderBoard() {
+  for (const [gpio, hole] of holes) {
+    hole.classList.toggle('lit', lit.has(gpio));
+    hole.classList.toggle('selected', selected === gpio);
+    const s = solenoidOf(gpio);
+    tags.get(gpio).hidden = !s;
+    tags.get(gpio).textContent = s ? `S${s}` : '';
+  }
+}
+
+function bindPress(el, gpio) {
+  let timer = null, holding = false;
+  const start = e => {
+    e.preventDefault();
+    try { el.setPointerCapture(e.pointerId); } catch {}  // the release comes back here even if the pointer drifts
+    select(gpio);
+    holding = false;
+    timer = setTimeout(() => { holding = true; send({ cmd: 'on', gpio }); }, 250);
+  };
+  const end = () => {
+    if (timer === null) return;
+    clearTimeout(timer);
+    timer = null;
+    send({ cmd: holding ? 'off' : 'p', gpio });
+  };
+  el.addEventListener('pointerdown', start);
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+  el.addEventListener('lostpointercapture', end);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(gpio); send({ cmd: 'p', gpio }); } });
+}
+
+function select(gpio) {
+  selected = gpio;
+  renderBoard();
+  renderPicker();
+}
+
+// ---------------------------------------------------------------- solenoid picker
+function renderPicker() {
+  $('selected').innerHTML = selected == null
+    ? 'Press a pin on the board first.'
+    : `Last pin: <strong>${LABEL[selected]}</strong> (GPIO ${selected}) — tap the solenoid that dropped.`;
+  const cell = $('cell');
+  cell.innerHTML = '';
+  for (const s of [1, 2, 3, 4, 5, 6]) {
+    const b = document.createElement('button');
+    b.className = 'sol' + (map[s] != null ? ' set' : '');
+    b.disabled = selected == null;
+    b.innerHTML = `<b>S${s}</b><small>${map[s] != null ? `${LABEL[map[s]]} · ${map[s]}` : 'not found'}</small>`;
+    b.onclick = () => tag(s, selected);
+    cell.appendChild(b);
+  }
+  $('clear-pin').disabled = selected == null;
+}
+
+function tag(s, gpio) {
+  for (const k of Object.keys(map)) if (map[k] === gpio) map[k] = null;
+  map[s] = gpio;
+  persist();
+  renderBoard(); renderPicker(); renderResult();
+}
+
+$('clear-pin').onclick = () => {
+  for (const k of Object.keys(map)) if (map[k] === selected) map[k] = null;
+  persist();
+  renderBoard(); renderPicker(); renderResult();
+};
+
+// ---------------------------------------------------------------- result
+function renderResult() {
+  $('map').innerHTML = [1, 2, 3, 4, 5, 6].map(s => `<tr><td>S${s}</td><td>${map[s] != null ? `${LABEL[map[s]]} (GPIO ${map[s]})` : '<span style="color:var(--faint)">not found</span>'}</td><td>${map[s] != null ? `<button class="btn" style="padding:2px 8px" data-untag="${s}">×</button>` : ''}</td></tr>`).join('');
+  $('map').querySelectorAll('[data-untag]').forEach(b => b.onclick = () => { map[b.dataset.untag] = null; persist(); renderBoard(); renderPicker(); renderResult(); });
+  const pins = [1, 2, 3, 4, 5, 6].map(s => map[s]);
+  const complete = pins.every(p => p != null);
+  $('line').textContent = `#define SOLENOID_PINS {${pins.map(p => p ?? '?').join(', ')}}  // S1, S2, S3, S4, S5, S6` +
+    (button != null ? `\n#define BUTTON_PIN ${button}\n#define BUTTON_ACTIVE_HIGH ${buttonTo3v3 ? 1 : 0}` : '');
+  $('button-row').textContent = button != null
+    ? `Button: ${LABEL[button] ?? ''} (GPIO ${button}), wired to ${buttonTo3v3 ? '3V3' : 'GND'}`
+    : 'Button: not found yet';
+  $('save').disabled = !complete && button == null;
+  if (pins.includes(1)) say('TX0 is the serial line: the firmware\'s log output would twitch that solenoid. Better to move it to a free pin (D4, D13, D21, D22, D23…).', 'warn');
+}
+
+let sayTimer;
+function say(text, tone = '') {
+  const el = $('msg');
+  el.className = 'msg ' + tone;
+  el.textContent = text;
+  clearTimeout(sayTimer);
+  if (tone !== 'warn') sayTimer = setTimeout(() => (el.textContent = ''), 6000);
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+$('test').onclick = async () => {
+  for (const s of [1, 2, 3, 4, 5, 6]) {
+    if (map[s] == null) continue;
+    select(map[s]);
+    say(`S${s}…`);
+    send({ cmd: 'p', gpio: map[s] });
+    await sleep(900);
+  }
+  say('Done: they should have dropped across, then down: S1 S2 / S3 S4 / S5 S6.', 'ok');
+};
+
+$('walk').onclick = async () => {
+  if (walking) { walking = false; return; }
+  walking = true;
+  $('walk').textContent = 'Stop walking';
+  $('walk').classList.add('on');
+  for (const gpio of WALK_ORDER) {
+    if (!walking) break;
+    select(gpio);
+    send({ cmd: 'p', gpio });
+    await sleep(1700);  // time to tap the solenoid that moved
+  }
+  walking = false;
+  $('walk').textContent = 'Walk all pins';
+  $('walk').classList.remove('on');
+};
+
+$('alloff').onclick = () => { walking = false; send({ cmd: 'raw', text: 'x' }); };
+$('find-button').onclick = () => { say('Press and release the tactile button 3 times within 8 seconds…'); send({ cmd: 'raw', text: 'b' }); };
+$('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('line').textContent); say('Copied.', 'ok'); } catch { say('Copy failed: select the text instead.', 'bad'); }
+};
+$('save').onclick = async () => {
+  const r = await fetch('/api/save', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      pins: [1, 2, 3, 4, 5, 6].every(s => map[s] != null) ? [1, 2, 3, 4, 5, 6].map(s => map[s]) : [],
+      button, button_to_3v3: buttonTo3v3,
+    }),
+  });
+  const data = await r.json();
+  say(r.ok ? `Saved to config.h: ${data.lines.join(' · ')}` : (data.detail || 'Save failed'), r.ok ? 'ok' : 'bad');
+};
+
+buildBoard(); renderBoard(); renderPicker(); renderResult(); connect();
+</script>
+</body>
+</html>
